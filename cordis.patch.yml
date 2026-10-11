@@ -1,0 +1,8 @@
+# dsh-logger-channels: cordis bundle patch that registers the plugin in the profile.
+# config is empty by default (built-in default channel: stderr @ error/info/warn).
+# Named channels are declared in a higher patch layer on this id via
+# config.channels (or the LOGGER_CHANNELS_* env layer); see README.md.
+- insert:
+    - id: dsh-logger-channels
+      name: 'dsh-logger-channels'
+      config: {}
