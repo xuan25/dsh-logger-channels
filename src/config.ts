@@ -50,66 +50,74 @@ function isColors(value: unknown): value is LogColors {
 }
 
 /**
- * Parse the env layer. A channel is DECLARED by `TYPE`; other keys are only
- * honored for names already declared by TYPE (in the env layer). Unknown keys
- * in the namespace are ignored by contract (the prefix may be shared).
+ * Parse the env layer. A channel is DECLARED by `TYPE`; the remaining keys
+ * attach to a channel declared by TYPE. All TYPE declarations are collected
+ * before any other key is applied, so the order of the variables in the
+ * process environment does not matter: a `MINLEVEL` entry that precedes its
+ * channel's `TYPE` entry is still honored. A key on a name that no `TYPE`
+ * entry declares is ignored (no phantom channel); unknown keys in the
+ * namespace are ignored by contract (the prefix may be shared).
  */
 function parseEnvChannels(env: EnvMap): Map<string, ChannelSpec> {
   const out = new Map<string, ChannelSpec>();
+  const entries: Array<{ name: string; key: string; raw: string }> = [];
   for (const [key, raw] of Object.entries(env)) {
     if (raw === undefined || !key.startsWith(ENV_PREFIX)) continue;
     const m = key.slice(ENV_PREFIX.length).match(ENV_KEY_RE);
     if (!m) continue;
     const name = m[1].toLowerCase();
-    const k = m[2];
     if (!CHANNEL_NAME_RE.test(name)) {
       continue; // env segment charset already guarantees this; defensive only
     }
-    let spec = out.get(name);
-    if (k === 'TYPE') {
-      if (!spec) {
-        spec = {};
-        out.set(name, spec);
-      }
-      if (!isChannelKind(raw)) fail(name, `TYPE must be 'stderr', 'stdout' or 'file' (got '${raw}')`);
-      spec.channel = raw;
-    } else {
-      spec = out.get(name);
-      if (!spec) continue; // non-TYPE key on an undeclared channel: ignored
+    entries.push({ name, key: m[2], raw });
+  }
+  for (const e of entries) {
+    if (e.key !== 'TYPE') continue;
+    let spec = out.get(e.name);
+    if (!spec) {
+      spec = {};
+      out.set(e.name, spec);
     }
-    switch (k) {
+    if (!isChannelKind(e.raw)) fail(e.name, `TYPE must be 'stderr', 'stdout' or 'file' (got '${e.raw}')`);
+    spec.channel = e.raw;
+  }
+  for (const e of entries) {
+    if (e.key === 'TYPE') continue;
+    const spec = out.get(e.name);
+    if (!spec) continue; // key on a name no TYPE entry declares: ignored
+    switch (e.key) {
       case 'PATH':
-        if (!raw) fail(name, 'PATH is empty');
-        spec.path = raw;
+        if (!e.raw) fail(e.name, 'PATH is empty');
+        spec.path = e.raw;
         break;
       case 'MINLEVEL': {
-        const n = Number(raw);
-        if (!Number.isInteger(n) || n < 0 || n > 3) fail(name, `MINLEVEL must be an integer 0-3 (got '${raw}')`);
+        const n = Number(e.raw);
+        if (!Number.isInteger(n) || n < 0 || n > 3) fail(e.name, `MINLEVEL must be an integer 0-3 (got '${e.raw}')`);
         spec.minLevel = n;
         break;
       }
       case 'COLORS':
-        if (raw === 'false' || raw === '0') spec.colors = false;
-        else if (raw === '1') spec.colors = 1;
-        else if (raw === '2') spec.colors = 2;
-        else if (raw === '3') spec.colors = 3;
-        else fail(name, `COLORS must be 'false' or 1-3 (got '${raw}')`);
+        if (e.raw === 'false' || e.raw === '0') spec.colors = false;
+        else if (e.raw === '1') spec.colors = 1;
+        else if (e.raw === '2') spec.colors = 2;
+        else if (e.raw === '3') spec.colors = 3;
+        else fail(e.name, `COLORS must be 'false' or 1-3 (got '${e.raw}')`);
         break;
       case 'MAXLENGTH': {
-        const n = Number(raw);
-        if (!Number.isInteger(n) || n <= 0) fail(name, `MAXLENGTH must be a positive integer (got '${raw}')`);
+        const n = Number(e.raw);
+        if (!Number.isInteger(n) || n <= 0) fail(e.name, `MAXLENGTH must be a positive integer (got '${e.raw}')`);
         spec.maxLength = n;
         break;
       }
       case 'MAXBYTES': {
-        const n = Number(raw);
-        if (!Number.isInteger(n) || n <= 0) fail(name, `MAXBYTES must be a positive integer (got '${raw}')`);
+        const n = Number(e.raw);
+        if (!Number.isInteger(n) || n <= 0) fail(e.name, `MAXBYTES must be a positive integer (got '${e.raw}')`);
         spec.maxBytes = n;
         break;
       }
       case 'KEEP': {
-        const n = Number(raw);
-        if (!Number.isInteger(n) || n < 1) fail(name, `KEEP must be an integer >= 1 (got '${raw}')`);
+        const n = Number(e.raw);
+        if (!Number.isInteger(n) || n < 1) fail(e.name, `KEEP must be an integer >= 1 (got '${e.raw}')`);
         spec.keep = n;
         break;
       }

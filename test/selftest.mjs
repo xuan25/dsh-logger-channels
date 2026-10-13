@@ -75,6 +75,27 @@ check('non-TYPE env key on an undeclared name is ignored (no phantom channel, no
   const got = resolveChannels({}, { LOGGER_CHANNELS_GHOST_PATH: '/tmp/ghost.log' });
   assert.deepEqual(got, []);
 });
+check('env keys are order-independent: MINLEVEL before TYPE is still honored', () => {
+  const env = {
+    LOGGER_CHANNELS_REV_MINLEVEL: '0',
+    LOGGER_CHANNELS_REV_TYPE: 'stderr',
+  };
+  const got = resolveChannels({}, env);
+  assert.equal(got.length, 1);
+  assert.deepEqual(got[0], { name: 'rev', channel: 'stderr', minLevel: 0, colors: false, maxLength: 10240 });
+});
+check('env keys are order-independent for file channels (PATH/MAXBYTES before TYPE)', () => {
+  const env = {
+    LOGGER_CHANNELS_FLIP_PATH: '/tmp/flip.log',
+    LOGGER_CHANNELS_FLIP_MAXBYTES: '4096',
+    LOGGER_CHANNELS_FLIP_TYPE: 'file',
+  };
+  const got = resolveChannels({}, env);
+  assert.equal(got.length, 1);
+  assert.equal(got[0].path, '/tmp/flip.log');
+  assert.equal(got[0].maxBytes, 4096);
+  assert.equal(got[0].channel, 'file');
+});
 
 // -- layering: config layer wins per key -------------------------------------
 check('config layer overrides env layer per key (path, minLevel)', () => {
